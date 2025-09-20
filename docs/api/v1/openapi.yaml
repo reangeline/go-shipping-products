@@ -1,0 +1,164 @@
+openapi: 3.0.3
+info:
+  title: Shipping Packs API
+  version: "1.0.0"
+  description: |
+    API to cálculo da combinação ótima de pacotes.
+servers:
+  - url: http://localhost:8080
+
+tags:
+  - name: packs
+    description: Operações relacionadas a tamanhos de pacotes e cálculo
+
+paths:
+  /v1/packsizes:
+    get:
+      tags: [packs]
+      summary: Listar tamanhos de pacotes vigentes
+      operationId: listPackSizes
+      responses:
+        "200":
+          description: Lista de tamanhos (ordenados asc)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PackSizesResponse"
+              examples:
+                ok:
+                  value: { "sizes": [250,500,1000,2000,5000] }
+        "500":
+          description: Erro ao carregar tamanhos do provider (arquivo/env)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                provider_error:
+                  value: { "code": "internal_error", "message": "unexpected error" }
+
+  /v1/calculate:
+    post:
+      tags: [packs]
+      summary: Calcular a combinação ótima de pacotes
+      operationId: calculatePacks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CalculateRequest"
+            examples:
+              sem_override:
+                value: { "quantity": 12001 }
+              com_override:
+                value: { "quantity": 751, "packsOverride": [250,500,1000] }
+      responses:
+        "200":
+          description: Resultado do cálculo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalculateResponse"
+              examples:
+                ok:
+                  value:
+                    itemsByPack: { "5000": 2, "2000": 1, "250": 1 }
+                    totalItems: 12250
+                    totalPacks: 4
+                    leftover: 249
+        "400":
+          description: Requisição inválida (ex. quantity ≤ 0 ou JSON malformado)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                invalid_quantity:
+                  value: { "code": "invalid_quantity", "message": "quantity must be > 0" }
+                invalid_request:
+                  value: { "code": "invalid_request", "message": "invalid JSON payload" }
+                invalid_pack:
+                  value: { "code": "invalid_pack", "message": "packsOverride must contain positive integers" }
+        "422":
+          description: Não há tamanhos de pacote disponíveis para cálculo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                no_packs:
+                  value: { "code": "no_pack_sizes", "message": "no pack sizes available" }
+        "500":
+          description: Erro interno inesperado (ex. I/O do provider)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                internal:
+                  value: { "code": "internal_error", "message": "unexpected error" }
+
+components:
+  schemas:
+    CalculateRequest:
+      type: object
+      required: [quantity]
+      properties:
+        quantity:
+          type: integer
+          minimum: 1
+          description: Quantidade solicitada
+        packsOverride:
+          type: array
+          description: Opcional; substitui a lista de tamanhos vinda do provider
+          items:
+            type: integer
+            minimum: 1
+    CalculateResponse:
+      type: object
+      required: [itemsByPack, totalItems, totalPacks, leftover]
+      properties:
+        itemsByPack:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 0
+          description: Mapa "tamanho do pack" -> "quantidade de pacotes"
+          example: { "5000": 2, "2000": 1, "250": 1 }
+        totalItems:
+          type: integer
+          minimum: 1
+        totalPacks:
+          type: integer
+          minimum: 0
+        leftover:
+          type: integer
+          minimum: 0
+    PackSizesResponse:
+      type: object
+      required: [sizes]
+      properties:
+        sizes:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+          example: [250,500,1000,2000,5000]
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Código de erro em snake_case
+          enum:
+            - invalid_request
+            - invalid_quantity
+            - invalid_pack
+            - no_pack_sizes
+            - internal_error
+        message:
+          type: string
+        details:
+          description: Informações adicionais (opcional)
