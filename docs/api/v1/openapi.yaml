@@ -3,7 +3,7 @@ info:
   title: Shipping Packs API
   version: "1.0.0"
   description: |
-    API to cálculo da combinação ótima de pacotes.
+    API to calculate packge optimazation.
 servers:
   - url: http://localhost:8080
 
